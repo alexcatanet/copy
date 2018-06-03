@@ -7,9 +7,9 @@
     <string name="action_info">action_info</string>
     <string name="main_btn_txt">RSR Pechhulp</string>
     <string name="dialing_button">Bel RSR nu</string>
-    <string name="location_title">Uw Locatie</string>
-    <string name="address_info">R.Cap. Aresta 200,4440/452 \nValongo, Portugal</string>
-    <string name="location_info">Onthoud deze locatie voor het \ntelefoongesprek</string>
+    <string name="location_title">Uw Locatie:</string>
+    <string name="address_info">R.Cap. Aresta 200,4440/452 \n\t\t\tValongo, Portugal</string>
+    <string name="location_info">Onthoud deze locatie voor het \n\t\t\t\ttelefoongesprek</string>
 
     <!-- Android labels-->
     <string name="activityInfo_class">Over RSR</string>
@@ -32,5 +32,11 @@
         Press OK to confirm</string>
     <string name="negative_button">Cancel</string>
     <string name="positive_button">OK</string>
+
+    <!-- Popup dialog strings !-->
+    <string name="cancel_popul_btn">Annuleren</string>
+    <string name="dialog_title">Belkosten</string>
+    <string name="dialog_content">Voor dit nummer betaalt u uw \n \t\tgebruikelijke belkosten.</string>
+    <string name="dialog_calling_btn">Bel nu</string>
 
 </resources>

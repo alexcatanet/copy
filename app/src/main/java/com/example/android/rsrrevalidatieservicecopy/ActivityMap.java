@@ -2,12 +2,18 @@ package com.example.android.rsrrevalidatieservicecopy;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.location.Address;
 import android.location.Criteria;
+import android.location.Geocoder;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -21,8 +27,11 @@ import android.support.v4.app.NavUtils;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.Toast;
 
@@ -35,15 +44,23 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
 
 import static com.example.android.rsrrevalidatieservicecopy.MainActivity.PLAY_SERVICES_RESOLUTION_REQUEST;
 
 public class ActivityMap extends AppCompatActivity implements OnMapReadyCallback,
-        GoogleMap.OnMyLocationButtonClickListener, GoogleMap.OnMyLocationClickListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+        GoogleMap.OnMyLocationButtonClickListener, GoogleMap.OnMyLocationClickListener,
+        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
     private static final String TAG = ActivityMap.class.getSimpleName();
 
@@ -56,6 +73,19 @@ public class ActivityMap extends AppCompatActivity implements OnMapReadyCallback
     private boolean mLocationPermissionGranted;
 
     private Location mLastKnownLocation;
+
+    private LocationManager locationManager;
+
+    private List<Address> addresses;
+
+    private String bestProvider;
+
+    private Criteria criteria;
+
+    private Geocoder geoCoder;
+    private LatLng latLng;
+    private double currentLatitude;
+    private double currentLongitude;
 
     GoogleMap mMap;
 
@@ -77,13 +107,52 @@ public class ActivityMap extends AppCompatActivity implements OnMapReadyCallback
             getActionBar().setDisplayHomeAsUpEnabled(true);
         }
 
-        Button button = findViewById(R.id.calling_btn);
-        button.setOnClickListener(new View.OnClickListener() {
+        final Button callingButton = findViewById(R.id.calling_btn);
+
+        final View.OnClickListener onClickListener = new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                dialContactPhone();
+                switch (v.getId()) {
+                    case R.id.calling_btn:
+
+                        final Dialog dialog = new Dialog(ActivityMap.this);
+                        dialog.requestWindowFeature(Window.FEATURE_LEFT_ICON);
+                        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+                        dialog.setContentView(R.layout.popup_dialog);
+                        Button cancelBtn = dialog.findViewById(R.id.cancel_btn);
+                        Button dialingBtn = dialog.findViewById(R.id.dialog_btn_dialing);
+
+                        View.OnClickListener onClickListener1 = new View.OnClickListener() {
+                            public void onClick(View v) {
+                                switch (v.getId()) {
+                                    case R.id.cancel_btn:
+                                        dialog.dismiss();
+                                        break;
+                                    case R.id.dialog_btn_dialing:
+                                        dialContactPhone();
+                                        break;
+                                }
+                            }
+                        };
+
+                        cancelBtn.setOnClickListener(onClickListener1);
+                        dialingBtn.setOnClickListener(onClickListener1);
+
+                        dialog.setCanceledOnTouchOutside(false);
+
+                        Window window = dialog.getWindow();
+                        WindowManager.LayoutParams layoutParams = window.getAttributes();
+
+                        layoutParams.gravity = Gravity.END;
+                        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                        window.setAttributes(layoutParams);
+
+                        dialog.show();
+                        break;
+                }
             }
-        });
+        };
+        callingButton.setOnClickListener(onClickListener);
     }
 
     private void getLocationPermission() {
@@ -104,8 +173,14 @@ public class ActivityMap extends AppCompatActivity implements OnMapReadyCallback
 
     //  Call the contact phone given
     private void dialContactPhone() {
-        startActivity(new Intent(Intent.ACTION_DIAL, Uri.fromParts
-                ("tel", "31 900 7788990", null)));
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(ActivityMap.this, new String[]{Manifest
+                    .permission.CALL_PHONE}, 256);
+            return;
+        }
+        startActivity(new Intent(Intent.ACTION_CALL, Uri.fromParts
+                ("tel", "+31 900 7788990", null)));
     }
 
     @Override
@@ -139,22 +214,17 @@ public class ActivityMap extends AppCompatActivity implements OnMapReadyCallback
                 != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission
                 (this, Manifest.permission.ACCESS_COARSE_LOCATION) !=
                 PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
+            ActivityCompat.requestPermissions(ActivityMap.this, new String[]{Manifest
+                    .permission.ACCESS_FINE_LOCATION}, 256);
+            ActivityCompat.requestPermissions(ActivityMap.this, new String[]{Manifest
+                    .permission.ACCESS_COARSE_LOCATION}, 256);
         }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED) {
-            buildGoogleApiClient();
 
+            buildGoogleApiClient();
             getDeviceLocation();
-            mMap.setMyLocationEnabled(true);
             mMap.setOnMyLocationButtonClickListener(this);
             mMap.setOnMyLocationClickListener(this);
         }
@@ -226,7 +296,16 @@ public class ActivityMap extends AppCompatActivity implements OnMapReadyCallback
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission
+                .ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(this, Manifest.permission
+                .ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
 
+            ActivityCompat.requestPermissions(ActivityMap.this, new String[]{Manifest
+                    .permission.ACCESS_FINE_LOCATION}, 256);
+            ActivityCompat.requestPermissions(ActivityMap.this, new String[]{Manifest
+                    .permission.ACCESS_COARSE_LOCATION}, 256);
+        }
     }
 
     @Override
@@ -246,21 +325,20 @@ public class ActivityMap extends AppCompatActivity implements OnMapReadyCallback
 
         LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         Criteria criteria = new Criteria();
-
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission
                 (this, Manifest.permission.ACCESS_COARSE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
+            ActivityCompat.requestPermissions(ActivityMap.this, new String[]{Manifest
+                    .permission.ACCESS_FINE_LOCATION}, 256);
+            ActivityCompat.requestPermissions(ActivityMap.this, new String[]{Manifest
+                    .permission.ACCESS_COARSE_LOCATION}, 256);
         }
-        final Location location = locationManager.getLastKnownLocation(locationManager.getBestProvider(criteria, false));
+        final Location location;
+        location = locationManager.getLastKnownLocation(locationManager
+                .getBestProvider(criteria, false));
+        handleNewLocation(location);
+
            /*
          * Get the best and most recent location of the device, which may be null in rare
          * cases when a location is not available.
@@ -402,6 +480,33 @@ public class ActivityMap extends AppCompatActivity implements OnMapReadyCallback
                     });
             AlertDialog alert = alertDialogBuilder.create();
             alert.show();
+        }
+    }
+
+
+    public void handleNewLocation(Location location) {
+        currentLatitude = location.getLatitude();
+        currentLongitude = location.getLongitude();
+        latLng = new LatLng(currentLatitude, currentLongitude);
+        geoCoder = new Geocoder(this, Locale.getDefault());
+        try {
+            addresses = geoCoder.getFromLocation(currentLatitude, currentLongitude, 1);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if (isConnected(ActivityMap.this)) {
+            String address = addresses.get(0).getAddressLine(0);
+            String zipCode = addresses.get(0).getPostalCode();
+            String city = addresses.get(0).getLocality();
+            String country = addresses.get(0).getCountryName();
+
+            Marker marker = mMap.addMarker(new MarkerOptions().position(latLng).title("Uw Locatie")
+                    .snippet(address + ", " + zipCode + "\n" + city + ", " + country + "\n" + "\n" +
+                            "Onthoud deze locatie voor het " + "\n" + "telefoongesprek.").icon(BitmapDescriptorFactory
+                            .fromResource(R.drawable.map_marker_mini)));
+            mMap.setInfoWindowAdapter(new CustomInfoWindowAdapter(getLayoutInflater()));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15));
+            marker.showInfoWindow();
         }
     }
 }
